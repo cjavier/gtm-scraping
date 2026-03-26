@@ -1,87 +1,124 @@
 # GTM Scraping
 
-Sistema multi-cliente para investigar y construir bases de datos de empresas usando Claude Code como orquestador. Combina busqueda SERP, scraping web y un viewer local con paginacion server-side.
+**El proceso de prospección que hoy hacen tus vendedores manualmente — pero 100% orquestado por inteligencia artificial.**
 
-Pensado para equipos de ventas B2B, agencias de generacion de leads o cualquier operacion GTM (Go-To-Market) que necesite construir listas de prospectos a partir de busquedas en Google y scraping de sitios web.
+Piensa en cómo funciona hoy: alguien de tu equipo abre Google, busca empresas de su mercado, entra a cada sitio web, copia teléfonos y emails en un Excel, y repite eso cientos de veces. Es lento, tedioso y se pierden datos.
 
-## Como funciona
+GTM Scraping automatiza todo ese flujo. Le dices a la IA qué tipo de empresas necesitas, en qué ciudad o industria, y ella busca en Google, entra a cada sitio web, extrae los datos de contacto y te los organiza en una base de datos lista para tu equipo de ventas.
+
+## El problema que resuelve
+
+Si vendes B2B, sabes que el primer paso es siempre el mismo: **encontrar a quién venderle**. Construir esa lista de prospectos es un trabajo manual que consume horas, especialmente si operas en un nicho donde no existe un directorio listo para comprar.
+
+Con esta herramienta:
+
+- **Si los datos de tu mercado existen en algún lugar de internet, esta aplicación los va a encontrar por ti.** No importa qué tan segmentado sea tu nicho — si las empresas tienen sitio web, las encuentra.
+- **Mapea tu Total Addressable Market de verdad.** No estimas con promedios de industria — construyes la lista real, empresa por empresa, con datos reales.
+- **Corre 100% local.** Tus datos de prospectos no pasan por servicios de terceros. Todo queda en tu máquina.
+- **Cuesta casi nada.** Las herramientas que usa son en su mayoría locales y gratuitas. Las APIs externas tienen tiers gratuitos generosos (2,500 búsquedas, 500 scrapes).
+- **Soporta múltiples clientes.** Si eres agencia o manejas varias cuentas, cada cliente tiene su propio espacio con datos separados.
+
+## Cómo funciona
+
+Le hablas a Claude Code en lenguaje natural. Él decide qué herramientas usar, en qué orden, y maneja los errores solo.
 
 ```
-                        Claude Code (orquestador)
-                       /          |              \
-              MCP crawl4ai    MCP firecrawl    MCP gtm-db
-              (scraping)      (fallback)       (clientes + DB)
-                       \          |              /
-                        SQLite (empresas.db)
-                               |
-                        Flask API + Viewer
-                        http://localhost:8080
+Tú:   "Busca clínicas de neuropsicología en Mérida para el cliente NeuroVentas"
+
+IA:   1. Crea el cliente NeuroVentas (si no existe)
+      2. Busca en Google "clínicas neuropsicología Mérida"
+      3. Guarda las 18 empresas encontradas en la base de datos
+      4. Entra a cada sitio web y extrae teléfono, email, dirección, servicios
+      5. Busca al fundador o director en cada sitio
+      6. Te reporta: "18 empresas encontradas, 14 con email, 11 con teléfono directo"
 ```
 
-1. **Creas un cliente** desde el viewer o via MCP
-2. **Buscas empresas** en Google con Serper.dev — se guardan automaticamente en la DB asociadas al cliente
-3. **Scrapeas sitios** con Crawl4AI para enriquecer datos (telefono, email, contactos, redes sociales)
-4. **Revisas y exportas** desde el viewer web con filtros, busqueda y paginacion
+Después abres el viewer en tu navegador, filtras, revisas y exportas el CSV listo para tu CRM.
 
-Claude Code orquesta todo el flujo usando las herramientas MCP y los skills definidos en el proyecto. Tu le dices "busca constructoras en Monterrey para el cliente X" y el hace el resto.
+### La IA toma decisiones por ti
 
-## Que incluye
+El sistema tiene múltiples herramientas y elige la mejor según la situación:
 
-| Componente | Descripcion |
-|---|---|
-| `scripts/serper_search.py` | Busqueda en Google via Serper.dev con auto-guardado en DB |
-| `scripts/crawl4ai_scraper.py` | Scraping de sitios web con extraccion de contactos (regex para formatos mexicanos) |
-| `scripts/db_utils.py` | CRUD completo: empresas, clientes, busquedas, logs, exports |
-| `scripts/api_server.py` | API Flask con paginacion server-side + sirve el viewer |
-| `scripts/db_mcp_server.py` | MCP server con 11 herramientas para gestion de clientes y empresas |
-| `scripts/crawl4ai_server.py` | MCP server para crawling de paginas web |
-| `viewer/index.html` | App React con grid de clientes, tabla de empresas, edicion inline |
-| `skills/*.md` | Instrucciones para Claude Code sobre como ejecutar cada tarea |
+**Para buscar empresas:**
+- Si son pocas búsquedas, usa el navegador directamente
+- Si son muchas, usa la API de Serper.dev (2,500 búsquedas gratis)
+- Si esa API falla, cambia automáticamente a Firecrawl
 
-## Requisitos
+**Para entrar a sitios web:**
+- Primero intenta con Crawl4AI (gratuito, corre local en tu máquina)
+- Si el sitio lo bloquea, cambia a Firecrawl (API con 500 créditos gratis)
+- Si ambos fallan, te pide que abras el sitio manualmente en Chrome
 
-- **Python 3.9+**
-- **Node.js 18+**
-- **Claude Code** (CLI de Anthropic) — para orquestar las herramientas MCP
-- **API key de Serper.dev** — para busquedas en Google ([serper.dev](https://serper.dev), 2,500 busquedas gratis)
-- **API key de Firecrawl** (opcional) — scraping de fallback ([firecrawl.dev](https://firecrawl.dev), 500 creditos gratis)
+No tienes que saber cuál herramienta usar. La IA evalúa, decide y si algo falla, cambia de estrategia sola.
 
-## Instalacion
+## Qué datos extrae
+
+De cada empresa:
+- Nombre, sitio web, teléfono, email
+- Dirección, ciudad, estado
+- Industria, servicios, descripción
+- Redes sociales (Facebook, LinkedIn, Instagram)
+
+Del contacto principal (fundador, director, dueño):
+- Nombre completo y cargo
+- Email y teléfono directo
+- Perfil de LinkedIn
+
+Todos los datos se guardan organizados por cliente, listos para exportar a CSV o conectar con tu CRM.
+
+## El viewer
+
+Una interfaz web local donde ves todo lo que la IA encontró:
+
+- **Pantalla de clientes** — cada cliente es una tarjeta con su conteo de empresas
+- **Tabla de empresas** — con filtros por ciudad, estado, industria y status
+- **Búsqueda instantánea** — encuentra cualquier empresa en milisegundos
+- **Edición inline** — doble clic en cualquier celda para corregir datos
+- **Export CSV** — un clic para descargar la lista filtrada
+
+Corre en `http://localhost:8080` y carga rápido aunque tengas miles de registros (paginación server-side).
+
+---
+
+## Instalación
+
+### Requisitos
+
+- **Python 3.9+** y **Node.js 18+**
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** (CLI de Anthropic)
+- **API key de [Serper.dev](https://serper.dev)** — para búsquedas en Google (2,500 gratis)
+- **API key de [Firecrawl](https://firecrawl.dev)** (opcional) — scraping de fallback (500 créditos gratis)
+
+### Pasos
 
 ```bash
-# Clonar el repositorio
+# 1. Clonar el repositorio
 git clone https://github.com/cjavier/gtm-scraping.git
 cd gtm-scraping
 
-# Crear y activar entorno virtual
+# 2. Crear entorno Python e instalar dependencias
 python3 -m venv venv
 source venv/bin/activate
-
-# Instalar dependencias Python
 pip install -r requirements.txt
-
-# Instalar Playwright (navegador headless para Crawl4AI)
 playwright install chromium
 
-# Instalar dependencias Node (Firecrawl MCP)
+# 3. Instalar dependencia Node
 npm install
 
-# Configurar variables de ambiente
+# 4. Configurar tus API keys
 cp .env.example .env
-# Editar .env con tus API keys
+# Editar .env con tus keys de Serper.dev y Firecrawl
 ```
 
-La base de datos SQLite se crea automaticamente en `db/empresas.db` la primera vez que se ejecuta cualquier script.
+### Configurar MCP para Claude Code
 
-## Configuracion de MCP
-
-Claude Code necesita rutas absolutas para los MCP servers. Copia el template y reemplaza las rutas:
+Claude Code se conecta a las herramientas del proyecto via MCP. Copia el template y reemplaza las rutas con la ubicación de tu proyecto:
 
 ```bash
 cp .mcp.json.example .mcp.json
 ```
 
-Edita `.mcp.json` y reemplaza `/RUTA/A/TU/PROYECTO` con la ruta absoluta donde clonaste el repo. Por ejemplo, si clonaste en `/Users/tu-usuario/gtm-scraping`:
+Edita `.mcp.json` y cambia `/RUTA/A/TU/PROYECTO` por la ruta real. Ejemplo:
 
 ```json
 {
@@ -103,162 +140,118 @@ Edita `.mcp.json` y reemplaza `/RUTA/A/TU/PROYECTO` con la ruta absoluta donde c
 }
 ```
 
-> **Nota:** `.mcp.json` esta en `.gitignore` porque contiene rutas locales. Cada usuario genera el suyo a partir de `.mcp.json.example`.
+La base de datos se crea automáticamente la primera vez que ejecutas cualquier comando.
+
+---
 
 ## Uso
 
-### Iniciar el viewer
+### Con Claude Code (recomendado)
 
-```bash
-source venv/bin/activate
-python scripts/api_server.py --port 8080
-```
-
-Abre http://localhost:8080. Desde ahi puedes:
-- Crear y gestionar clientes
-- Ver empresas por cliente con filtros y paginacion
-- Editar datos inline (doble clic en cualquier celda)
-- Exportar CSV por cliente
-- Asignar empresas sin cliente
-
-### Usar con Claude Code
-
-Abre Claude Code en el directorio del proyecto. Los MCP servers se cargan automaticamente.
+Abre Claude Code en el directorio del proyecto. Las herramientas se cargan automáticamente.
 
 **Crear un cliente:**
-> "Crea un cliente llamado Acme Corp, industria construccion"
+> "Crea un cliente llamado Acme Corp, industria construcción"
 
 **Buscar empresas:**
 > "Busca constructoras en Monterrey para Acme Corp, 20 resultados"
 
 **Scrapear un sitio:**
-> "Scrapea https://constructora-ejemplo.com y extrae los datos de contacto para Acme Corp"
+> "Scrapea constructora-ejemplo.com y extrae los datos de contacto para Acme Corp"
 
 **Consultar datos:**
-> "Cuantas empresas tiene Acme Corp? Cuantas tienen email?"
+> "¿Cuántas empresas tiene Acme Corp? ¿Cuántas tienen email?"
 
-Claude Code usa los skills en `skills/` para saber que herramienta usar en cada paso y sigue la jerarquia de fallback automaticamente.
+**Scrapear en lote:**
+> "Scrapea todas las empresas de Acme Corp que todavía no tienen teléfono"
 
-### CLI directo (sin Claude Code)
+### Viewer web
 
 ```bash
-# Buscar en Google (guarda automaticamente en DB)
+source venv/bin/activate
+python scripts/api_server.py --port 8080
+# Abrir http://localhost:8080
+```
+
+### CLI directo
+
+También puedes usar los scripts directamente sin Claude Code:
+
+```bash
+# Buscar en Google (guarda automáticamente)
 python scripts/serper_search.py "agencias de marketing CDMX" --num 20
 
 # Scrapear un sitio
 python scripts/crawl4ai_scraper.py "https://ejemplo.com" --extract-contacts --save
 
-# Ver estadisticas
+# Ver estadísticas
 python scripts/db_utils.py --stats
-
-# Buscar en la DB
-python scripts/db_utils.py --search "Monterrey" --field ciudad
 
 # Exportar
 python scripts/db_utils.py --export-csv output/empresas.csv
-python scripts/db_utils.py --export-json output/empresas.json
 ```
 
-## Herramientas MCP disponibles
+---
 
-### gtm-db (gestion de clientes y datos)
+## Arquitectura
 
-| Herramienta | Descripcion |
-|---|---|
-| `crear_cliente` | Crear un nuevo cliente con nombre, descripcion, industria y color |
-| `listar_clientes` | Ver todos los clientes con conteo de empresas |
-| `ver_cliente` | Detalle de un cliente con estadisticas |
-| `actualizar_cliente` | Editar datos de un cliente |
-| `eliminar_cliente` | Eliminar un cliente (solo si no tiene empresas) |
-| `buscar_empresas_cliente` | Buscar empresas con filtros y paginacion server-side |
-| `filtros_disponibles` | Valores unicos para filtrar (ciudades, estados, industrias) |
-| `asignar_empresas_a_cliente` | Asignar empresas existentes a un cliente |
-| `empresas_sin_cliente` | Ver empresas sin cliente asignado |
-| `stats_cliente` | Estadisticas de un cliente especifico |
-| `stats_generales` | Estadisticas de toda la base de datos |
-
-### crawl4ai (scraping web)
-
-| Herramienta | Descripcion |
-|---|---|
-| `crawl_webpage` | Scrapear una pagina y devolver markdown |
-| `crawl_website` | Scrapear multiples paginas de un sitio |
-
-## Modelo de datos
-
-```
-clientes 1───N empresas
-                  │
-                  ├── datos de la empresa (nombre, sitio, telefono, email, direccion...)
-                  ├── clasificacion (industria, ciudad, estado, status)
-                  ├── contacto principal (nombre, cargo, email, telefono)
-                  └── metadata (fuente, query de origen, notas, fechas)
-```
-
-**Status de empresas:** `nuevo` → `verificado` → `contactado` / `descartado`
-
-La base de datos tambien registra logs de busquedas y scraping para tracking.
-
-## Estructura del proyecto
+Para quienes quieran entender o extender el sistema:
 
 ```
 gtm-scraping/
 ├── scripts/
-│   ├── api_server.py          # Flask API + viewer (python scripts/api_server.py)
-│   ├── db_utils.py            # Funciones de base de datos
-│   ├── db_mcp_server.py       # MCP server: clientes y empresas
-│   ├── crawl4ai_server.py     # MCP server: scraping
-│   ├── crawl4ai_scraper.py    # CLI: scraping con extraccion de contactos
-│   └── serper_search.py       # CLI: busqueda en Google
+│   ├── api_server.py          # API Flask + sirve el viewer web
+│   ├── db_utils.py            # Funciones de base de datos (CRUD, exports, stats)
+│   ├── db_mcp_server.py       # MCP: 11 herramientas de gestión de clientes y datos
+│   ├── crawl4ai_server.py     # MCP: scraping de páginas web
+│   ├── crawl4ai_scraper.py    # CLI: scraping con extracción de contactos
+│   └── serper_search.py       # CLI: búsqueda en Google via Serper.dev
 ├── db/
-│   ├── schema.sql             # Schema de la base de datos
-│   └── queries.sql            # Queries SQL de referencia
+│   └── schema.sql             # Esquema de la base de datos
 ├── viewer/
-│   └── index.html             # App React (servida por api_server.py)
-├── skills/
-│   ├── serp-research.md       # Instrucciones para busqueda SERP
-│   ├── site-scraper.md        # Instrucciones para scraping
-│   ├── data-extraction.md     # Instrucciones para extraccion de datos
-│   └── db-management.md       # Instrucciones para gestion de DB
-├── output/                    # Exports CSV/JSON (gitignored)
-├── .mcp.json.example          # Template de configuracion MCP (copiar a .mcp.json)
+│   └── index.html             # Interfaz web (React + Tailwind)
+├── skills/                    # Instrucciones que Claude Code sigue para cada tarea
+├── .mcp.json.example          # Template de configuración MCP
 ├── .env.example               # Template de variables de ambiente
 ├── requirements.txt           # Dependencias Python
-├── package.json               # Dependencia Node (firecrawl-mcp)
-└── CLAUDE.md                  # Instrucciones operativas para Claude Code
+└── CLAUDE.md                  # Reglas operativas para Claude Code
 ```
 
-## API del viewer
-
-El viewer corre sobre Flask y expone estos endpoints:
+### Modelo de datos
 
 ```
-GET    /api/clientes                         Lista de clientes
-POST   /api/clientes                         Crear cliente
-GET    /api/clientes/:id                     Detalle + stats
-PUT    /api/clientes/:id                     Actualizar cliente
-DELETE /api/clientes/:id                     Eliminar cliente
-GET    /api/clientes/:id/empresas            Empresas paginadas (?page=&search=&ciudad=&sort=&dir=)
-GET    /api/clientes/:id/filters             Opciones de filtro
-GET    /api/clientes/:id/export-csv          Descarga CSV
-GET    /api/empresas/sin-cliente             Empresas sin asignar
-POST   /api/empresas/asignar-cliente         Asignacion masiva
-PUT    /api/empresas/:id                     Edicion inline
+clientes 1───N empresas
+                  ├── datos empresa (nombre, sitio, teléfono, email, dirección, servicios)
+                  ├── clasificación (industria, ciudad, estado, status)
+                  ├── contacto principal (nombre, cargo, email, teléfono, LinkedIn)
+                  └── trazabilidad (fuente, query de origen, fecha, notas)
 ```
 
-## Jerarquia de fallback
+**Ciclo de vida:** `nuevo` → `verificado` → `contactado` / `descartado`
 
-El sistema tiene fallbacks automaticos para cada operacion:
+### Herramientas MCP (gtm-db)
 
-**Busqueda SERP:**
-1. Chrome (volumen bajo, < 20 busquedas)
-2. Serper.dev (volumen alto, automatizado)
-3. Firecrawl search (si Serper falla)
+| Herramienta | Qué hace |
+|---|---|
+| `crear_cliente` | Crear un nuevo cliente |
+| `listar_clientes` | Ver todos los clientes con conteo de empresas |
+| `ver_cliente` | Detalle y estadísticas de un cliente |
+| `actualizar_cliente` / `eliminar_cliente` | Editar o borrar un cliente |
+| `buscar_empresas_cliente` | Buscar empresas con filtros y paginación |
+| `asignar_empresas_a_cliente` | Mover empresas a un cliente |
+| `empresas_sin_cliente` | Ver empresas pendientes de asignar |
+| `stats_cliente` / `stats_generales` | Métricas de datos recolectados |
 
-**Scraping:**
-1. Crawl4AI (primario, headless Chromium)
-2. Firecrawl (fallback API)
-3. Chrome manual (ultimo recurso)
+### API del viewer
+
+```
+GET/POST   /api/clientes              Listar / crear clientes
+GET/PUT/DEL /api/clientes/:id         Ver / editar / borrar cliente
+GET        /api/clientes/:id/empresas  Empresas paginadas con filtros
+GET        /api/clientes/:id/export-csv Descarga CSV
+POST       /api/empresas/asignar-cliente Asignación masiva
+PUT        /api/empresas/:id           Edición inline
+```
 
 ## Licencia
 
