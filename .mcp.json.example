@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "crawl4ai": {
+      "command": "/RUTA/A/TU/PROYECTO/venv/bin/python",
+      "args": ["/RUTA/A/TU/PROYECTO/scripts/crawl4ai_server.py"]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
+      }
+    },
+    "gtm-db": {
+      "command": "/RUTA/A/TU/PROYECTO/venv/bin/python",
+      "args": ["/RUTA/A/TU/PROYECTO/scripts/db_mcp_server.py"]
+    }
+  }
+}

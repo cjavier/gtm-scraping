@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTM Scraping — Clientes</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .card-hover { transition: transform 0.15s, box-shadow 0.15s; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(0,0,0,0.1); }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+    const API = '';  // same origin
+
+    // ─── Color presets for client cards ────────────────────────────────────────
+    const COLOR_PRESETS = [
+      '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#10b981',
+      '#06b6d4', '#6366f1', '#ef4444', '#84cc16', '#f59e0b',
+    ];
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+    async function apiFetch(path, opts = {}) {
+      const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    // ─── Router (hash-based) ───────────────────────────────────────────────────
+    function useRoute() {
+      const [hash, setHash] = useState(window.location.hash);
+      useEffect(() => {
+        const handler = () => setHash(window.location.hash);
+        window.addEventListener('hashchange', handler);
+        return () => window.removeEventListener('hashchange', handler);
+      }, []);
+
+      if (hash.startsWith('#/cliente/')) {
+        const id = parseInt(hash.replace('#/cliente/', ''), 10);
+        if (!isNaN(id)) return { page: 'cliente', id };
+      }
+      if (hash === '#/sin-cliente') return { page: 'sin-cliente' };
+      return { page: 'home' };
+    }
+
+    // ─── Modal Component ───────────────────────────────────────────────────────
+    function Modal({ open, onClose, title, children }) {
+      if (!open) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            <div className="px-6 py-5">{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Client Form ───────────────────────────────────────────────────────────
+    function ClienteForm({ initial, onSave, onCancel, saving }) {
+      const [form, setForm] = useState(initial || { nombre: '', descripcion: '', industria_objetivo: '', color: '#3b82f6' });
+      const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+      return (
+        <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre *</label>
+            <input value={form.nombre} onChange={e => set('nombre', e.target.value)} required
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Descripcion</label>
+            <textarea value={form.descripcion || ''} onChange={e => set('descripcion', e.target.value)} rows={2}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Industria objetivo</label>
+            <input value={form.industria_objetivo || ''} onChange={e => set('industria_objetivo', e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Color</label>
+            <div className="flex items-center gap-2">
+              {COLOR_PRESETS.map(c => (
+                <button key={c} type="button" onClick={() => set('color', c)}
+                  className={`w-7 h-7 rounded-full border-2 transition ${form.color === c ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                  style={{ backgroundColor: c }} />
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button type="submit" disabled={saving || !form.nombre.trim()}
+              className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      );
+    }
+
+    // ─── Status Badge ──────────────────────────────────────────────────────────
+    const STATUS_CONFIG = {
+      nuevo:      { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Nuevo' },
+      verificado: { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Verificado' },
+      descartado: { bg: 'bg-slate-100',  text: 'text-slate-500',  label: 'Descartado' },
+      contactado: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Contactado' },
+    };
+
+    function StatusBadge({ value }) {
+      const cfg = STATUS_CONFIG[value] || { bg: 'bg-slate-100', text: 'text-slate-500', label: value || '—' };
+      return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOME PAGE — Client list
+    // ═══════════════════════════════════════════════════════════════════════════
+    function HomePage() {
+      const [clientes, setClientes] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [showModal, setShowModal] = useState(false);
+      const [editCliente, setEditCliente] = useState(null);
+      const [saving, setSaving] = useState(false);
+      const [sinCliente, setSinCliente] = useState(0);
+
+      const loadClientes = async () => {
+        try {
+          const data = await apiFetch('/api/clientes');
+          setClientes(data);
+        } catch (e) { console.error(e); }
+        setLoading(false);
+      };
+
+      const loadSinCliente = async () => {
+        try {
+          const data = await apiFetch('/api/empresas/sin-cliente?per_page=1');
+          setSinCliente(data.total);
+        } catch (e) { console.error(e); }
+      };
+
+      useEffect(() => { loadClientes(); loadSinCliente(); }, []);
+
+      const handleSave = async (form) => {
+        setSaving(true);
+        try {
+          if (editCliente) {
+            await apiFetch(`/api/clientes/${editCliente.id}`, { method: 'PUT', body: JSON.stringify(form) });
+          } else {
+            await apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(form) });
+          }
+          setShowModal(false);
+          setEditCliente(null);
+          await loadClientes();
+        } catch (e) { alert(e.message); }
+        setSaving(false);
+      };
+
+      const handleDelete = async (id, nombre) => {
+        if (!confirm(`Eliminar cliente "${nombre}"?`)) return;
+        try {
+          await apiFetch(`/api/clientes/${id}`, { method: 'DELETE' });
+          await loadClientes();
+        } catch (e) { alert(e.message); }
+      };
+
+      const totalEmpresas = clientes.reduce((s, c) => s + (c.total_empresas || 0), 0);
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="inline-block w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+              <p className="text-slate-500">Cargando clientes...</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="max-w-6xl mx-auto px-4 py-8 fade-in">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">GTM Scraping</h1>
+              <p className="text-sm text-slate-500 mt-1">{clientes.length} clientes &middot; {totalEmpresas} empresas totales</p>
+            </div>
+            <button onClick={() => { setEditCliente(null); setShowModal(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 shadow-sm transition">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Nuevo cliente
+            </button>
+          </div>
+
+          {/* Sin cliente banner */}
+          {sinCliente > 0 && (
+            <a href="#/sin-cliente"
+              className="block mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-200 rounded-lg flex items-center justify-center text-amber-700 text-lg font-bold">!</div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">{sinCliente} empresas sin cliente asignado</p>
+                  <p className="text-xs text-amber-600">Haz clic para verlas y asignarlas a un cliente</p>
+                </div>
+              </div>
+            </a>
+          )}
+
+          {/* Client grid */}
+          {clientes.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-2xl flex items-center justify-center">
+                <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <p className="text-slate-500 text-lg font-medium">Sin clientes</p>
+              <p className="text-slate-400 text-sm mt-1">Crea tu primer cliente para comenzar</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {clientes.map(c => (
+                <a key={c.id} href={`#/cliente/${c.id}`}
+                  className="card-hover bg-white rounded-2xl border border-slate-200 p-5 block group relative">
+                  {/* Color bar */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl" style={{ backgroundColor: c.color || '#3b82f6' }} />
+
+                  <div className="flex items-start justify-between mt-1">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-bold text-slate-800 truncate group-hover:text-blue-600 transition">{c.nombre}</h3>
+                      {c.industria_objetivo && (
+                        <p className="text-xs text-slate-400 mt-0.5 truncate">{c.industria_objetivo}</p>
+                      )}
+                      {c.descripcion && (
+                        <p className="text-sm text-slate-500 mt-2 line-clamp-2">{c.descripcion}</p>
+                      )}
+                    </div>
+                    {/* Actions */}
+                    <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={e => { e.preventDefault(); setEditCliente(c); setShowModal(true); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Editar">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button onClick={e => { e.preventDefault(); handleDelete(c.id, c.nombre); }}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500" title="Eliminar">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Stats footer */}
+                  <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      <span className="text-sm font-semibold text-slate-700">{c.total_empresas || 0}</span>
+                      <span className="text-xs text-slate-400">empresas</span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Modal */}
+          <Modal open={showModal} onClose={() => { setShowModal(false); setEditCliente(null); }}
+            title={editCliente ? 'Editar cliente' : 'Nuevo cliente'}>
+            <ClienteForm initial={editCliente} onSave={handleSave} onCancel={() => { setShowModal(false); setEditCliente(null); }} saving={saving} />
+          </Modal>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CLIENT PAGE — Empresas table with server-side pagination
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const COLUMNS = [
+      { key: 'nombre',    label: 'Nombre',     sortable: true,  filterable: false },
+      { key: 'sitio_web', label: 'Sitio Web',  sortable: true,  filterable: false },
+      { key: 'telefono',  label: 'Telefono',   sortable: false, filterable: false },
+      { key: 'email',     label: 'Email',      sortable: true,  filterable: false },
+      { key: 'ciudad',    label: 'Ciudad',     sortable: true,  filterable: true },
+      { key: 'estado',    label: 'Estado',     sortable: true,  filterable: true },
+      { key: 'industria', label: 'Industria',  sortable: true,  filterable: true },
+      { key: 'status',    label: 'Status',     sortable: true,  filterable: true },
+    ];
+
+    function ClientePage({ clienteId }) {
+      const [cliente, setCliente] = useState(null);
+      const [data, setData] = useState({ items: [], total: 0, page: 1, total_pages: 1 });
+      const [filters, setFilters] = useState({});
+      const [filterOptions, setFilterOptions] = useState({});
+      const [loading, setLoading] = useState(true);
+      const [tableLoading, setTableLoading] = useState(false);
+      const [search, setSearch] = useState('');
+      const [sortKey, setSortKey] = useState('nombre');
+      const [sortDir, setSortDir] = useState('asc');
+      const [page, setPage] = useState(1);
+      const [error, setError] = useState(null);
+      const searchTimeout = useRef(null);
+      const [debouncedSearch, setDebouncedSearch] = useState('');
+
+      // Load client info + filter options once
+      useEffect(() => {
+        (async () => {
+          try {
+            const [c, opts] = await Promise.all([
+              apiFetch(`/api/clientes/${clienteId}`),
+              apiFetch(`/api/clientes/${clienteId}/filters`),
+            ]);
+            setCliente(c);
+            setFilterOptions(opts);
+          } catch (e) { setError(e.message); }
+          setLoading(false);
+        })();
+      }, [clienteId]);
+
+      // Debounce search
+      useEffect(() => {
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => {
+          setDebouncedSearch(search);
+          setPage(1);
+        }, 300);
+        return () => clearTimeout(searchTimeout.current);
+      }, [search]);
+
+      // Load empresas when params change
+      useEffect(() => {
+        if (!cliente) return;
+        (async () => {
+          setTableLoading(true);
+          try {
+            const params = new URLSearchParams({
+              page, per_page: 100, sort: sortKey, dir: sortDir,
+            });
+            if (debouncedSearch) params.set('search', debouncedSearch);
+            for (const [k, v] of Object.entries(filters)) {
+              if (v) params.set(k, v);
+            }
+            const result = await apiFetch(`/api/clientes/${clienteId}/empresas?${params}`);
+            setData(result);
+          } catch (e) { console.error(e); }
+          setTableLoading(false);
+        })();
+      }, [cliente, clienteId, page, sortKey, sortDir, debouncedSearch, filters]);
+
+      const handleSort = (key) => {
+        if (sortKey === key) {
+          setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        } else {
+          setSortKey(key);
+          setSortDir('asc');
+        }
+        setPage(1);
+      };
+
+      const handleFilter = (key, val) => {
+        setFilters(prev => ({ ...prev, [key]: val }));
+        setPage(1);
+      };
+
+      const handleClearFilters = () => {
+        setFilters({});
+        setSearch('');
+        setDebouncedSearch('');
+        setPage(1);
+      };
+
+      const activeFiltersCount = Object.values(filters).filter(Boolean).length + (debouncedSearch ? 1 : 0);
+
+      // Inline edit
+      const handleInlineEdit = async (empresaId, field, value) => {
+        try {
+          await apiFetch(`/api/empresas/${empresaId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ [field]: value }),
+          });
+          // Update local data
+          setData(prev => ({
+            ...prev,
+            items: prev.items.map(r => r.id === empresaId ? { ...r, [field]: value } : r),
+          }));
+        } catch (e) { alert('Error al guardar: ' + e.message); }
+      };
+
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="inline-block w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        );
+      }
+
+      if (error) {
+        return (
+          <div className="flex items-center justify-center min-h-screen p-6">
+            <div className="bg-white border border-red-200 rounded-2xl p-8 max-w-md text-center">
+              <p className="text-red-600 font-medium mb-4">{error}</p>
+              <a href="#/" className="text-blue-600 hover:underline text-sm">Volver al inicio</a>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col min-h-screen bg-slate-50">
+          {/* Header */}
+          <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
+            <div className="max-w-screen-2xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+              <a href="#/" className="flex items-center gap-2 text-slate-400 hover:text-blue-600 transition mr-2" title="Volver a clientes">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </a>
+
+              <div className="w-2 h-8 rounded-full mr-1" style={{ backgroundColor: cliente.color || '#3b82f6' }} />
+              <div className="mr-auto">
+                <h1 className="text-lg font-bold text-slate-800 leading-tight">{cliente.nombre}</h1>
+                <p className="text-xs text-slate-400 leading-tight">
+                  {data.total} empresas
+                  {cliente.stats && ` · ${cliente.stats.con_email} con email · ${cliente.stats.con_telefono} con tel`}
+                </p>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" />
+                </svg>
+                <input type="text" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)}
+                  className="pl-9 pr-8 py-2 text-sm border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-300 outline-none w-56 transition" />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">&times;</button>
+                )}
+              </div>
+
+              {/* Export */}
+              <a href={`/api/clientes/${clienteId}/export-csv`} target="_blank"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition shadow-sm">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                CSV
+              </a>
+            </div>
+          </header>
+
+          {/* Filter Bar */}
+          <div className="bg-white border-b border-slate-200 sticky top-[61px] z-20">
+            <div className="max-w-screen-2xl mx-auto px-4 py-2 flex flex-wrap items-center gap-3">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Filtros</span>
+              {COLUMNS.filter(c => c.filterable).map(col => (
+                <div key={col.key} className="relative">
+                  <select value={filters[col.key] || ''} onChange={e => handleFilter(col.key, e.target.value)}
+                    className={`text-sm border rounded-lg px-3 py-1.5 pr-8 outline-none transition appearance-none cursor-pointer
+                      ${filters[col.key]
+                        ? 'border-blue-400 bg-blue-50 text-blue-700 font-medium'
+                        : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-slate-400'}`}>
+                    <option value="">Todos — {col.label}</option>
+                    {(filterOptions[col.key] || []).map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              {activeFiltersCount > 0 && (
+                <button onClick={handleClearFilters}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg px-3 py-1.5 transition">
+                  Limpiar ({activeFiltersCount})
+                </button>
+              )}
+              <div className="ml-auto text-sm text-slate-500">
+                {data.total} empresa{data.total !== 1 ? 's' : ''}
+                {tableLoading && <span className="ml-2 text-blue-500 text-xs">cargando...</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <main className="flex-1 max-w-screen-2xl w-full mx-auto px-4 py-4">
+            <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-opacity ${tableLoading ? 'opacity-60' : ''}`}>
+              <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-400 uppercase w-10 sticky top-0 bg-slate-50 z-10">#</th>
+                      {COLUMNS.map(col => (
+                        <th key={col.key}
+                          className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10 ${col.sortable ? 'cursor-pointer hover:bg-slate-100 select-none' : ''}`}
+                          onClick={col.sortable ? () => handleSort(col.key) : undefined}>
+                          <span className="flex items-center gap-1">
+                            {col.label}
+                            {col.sortable && sortKey === col.key && (
+                              <span className="text-blue-500">{sortDir === 'asc' ? '\u25B2' : '\u25BC'}</span>
+                            )}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.items.length === 0 ? (
+                      <tr>
+                        <td colSpan={COLUMNS.length + 1} className="px-6 py-16 text-center text-slate-400">
+                          Sin resultados
+                          {activeFiltersCount > 0 && (
+                            <button onClick={handleClearFilters} className="block mx-auto mt-2 text-blue-500 hover:underline text-sm">Limpiar filtros</button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : data.items.map((row, idx) => (
+                      <EmpresaRow key={row.id} row={row} idx={(data.page - 1) * 100 + idx + 1} onSave={handleInlineEdit} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {data.total_pages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/60">
+                  <p className="text-sm text-slate-500">
+                    Pagina <span className="font-semibold text-slate-700">{data.page}</span> de {data.total_pages}
+                    {' · '}{data.total} registros
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <PagBtn label="&laquo;" disabled={page === 1} onClick={() => setPage(1)} />
+                    <PagBtn label="Anterior" disabled={page === 1} onClick={() => setPage(p => p - 1)} />
+                    {pageRange(data.page, data.total_pages).map((p, i) =>
+                      p === '...' ? <span key={`e${i}`} className="px-2 text-slate-400">...</span> :
+                      <PagBtn key={p} label={String(p)} active={p === data.page} onClick={() => setPage(p)} />
+                    )}
+                    <PagBtn label="Siguiente" disabled={page >= data.total_pages} onClick={() => setPage(p => p + 1)} />
+                    <PagBtn label="&raquo;" disabled={page >= data.total_pages} onClick={() => setPage(data.total_pages)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    // ─── Empresa table row with inline editing ─────────────────────────────────
+    function EmpresaRow({ row, idx, onSave }) {
+      const [editingCol, setEditingCol] = useState(null);
+      const [draft, setDraft] = useState('');
+      const inputRef = useRef(null);
+
+      useEffect(() => { if (editingCol && inputRef.current) inputRef.current.focus(); }, [editingCol]);
+
+      const startEdit = (col, value) => { setEditingCol(col); setDraft(value || ''); };
+      const cancelEdit = () => { setEditingCol(null); };
+      const commitEdit = () => {
+        if (editingCol && draft !== (row[editingCol] || '')) {
+          onSave(row.id, editingCol, draft);
+        }
+        setEditingCol(null);
+      };
+
+      const renderCell = (col) => {
+        const val = row[col.key];
+        if (editingCol === col.key) {
+          return (
+            <td key={col.key} className="px-3 py-2 border-b border-slate-100 bg-blue-50">
+              <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)}
+                onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                className="w-full text-sm bg-transparent border-none outline-none min-w-[80px]" />
+            </td>
+          );
+        }
+
+        let content;
+        if (col.key === 'status') {
+          content = <StatusBadge value={val} />;
+        } else if (col.key === 'sitio_web' && val) {
+          const href = val.startsWith('http') ? val : 'https://' + val;
+          content = <a href={href} target="_blank" rel="noopener" className="text-blue-600 underline underline-offset-2 hover:text-blue-800" onClick={e => e.stopPropagation()}>{val}</a>;
+        } else if (col.key === 'email' && val) {
+          content = <a href={`mailto:${val}`} className="text-blue-600 underline underline-offset-2" onClick={e => e.stopPropagation()}>{val}</a>;
+        } else if (col.key === 'telefono' && val) {
+          content = <a href={`tel:${String(val).replace(/\s/g,'')}`} className="text-blue-600 underline underline-offset-2" onClick={e => e.stopPropagation()}>{val}</a>;
+        } else {
+          content = val ? <span>{val}</span> : <span className="text-slate-300">—</span>;
+        }
+
+        return (
+          <td key={col.key} className="px-3 py-2 border-b border-slate-100 text-sm text-slate-700 max-w-[240px] truncate cursor-default"
+            onDoubleClick={() => startEdit(col.key, val)} title="Doble clic para editar">
+            {content}
+          </td>
+        );
+      };
+
+      return (
+        <tr className={`group transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} hover:bg-blue-50/40`}>
+          <td className="px-3 py-2 border-b border-slate-100 text-xs text-slate-300 text-right font-mono">{idx}</td>
+          {COLUMNS.map(col => renderCell(col))}
+        </tr>
+      );
+    }
+
+    // ─── Pagination helpers ────────────────────────────────────────────────────
+    function PagBtn({ label, disabled, active, onClick }) {
+      return (
+        <button onClick={onClick} disabled={disabled} dangerouslySetInnerHTML={{ __html: label }}
+          className={`px-3 py-1.5 text-sm rounded-lg border transition font-medium
+            ${active ? 'bg-blue-600 border-blue-600 text-white shadow-sm' :
+              disabled ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed' :
+              'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'}`} />
+      );
+    }
+
+    function pageRange(current, total) {
+      const range = 2;
+      const pages = [];
+      const start = Math.max(1, current - range);
+      const end = Math.min(total, current + range);
+      if (start > 1) pages.push(1);
+      if (start > 2) pages.push('...');
+      for (let p = start; p <= end; p++) pages.push(p);
+      if (end < total - 1) pages.push('...');
+      if (end < total) pages.push(total);
+      return pages;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIN CLIENTE PAGE
+    // ═══════════════════════════════════════════════════════════════════════════
+    function SinClientePage() {
+      const [data, setData] = useState({ items: [], total: 0, page: 1, total_pages: 1 });
+      const [clientes, setClientes] = useState([]);
+      const [selected, setSelected] = useState(new Set());
+      const [targetCliente, setTargetCliente] = useState('');
+      const [loading, setLoading] = useState(true);
+      const [page, setPage] = useState(1);
+
+      const load = async () => {
+        setLoading(true);
+        const [empresas, cls] = await Promise.all([
+          apiFetch(`/api/empresas/sin-cliente?page=${page}&per_page=100`),
+          apiFetch('/api/clientes'),
+        ]);
+        setData(empresas);
+        setClientes(cls);
+        setLoading(false);
+      };
+
+      useEffect(() => { load(); }, [page]);
+
+      const toggleSelect = (id) => {
+        setSelected(prev => {
+          const next = new Set(prev);
+          next.has(id) ? next.delete(id) : next.add(id);
+          return next;
+        });
+      };
+
+      const selectAll = () => {
+        if (selected.size === data.items.length) {
+          setSelected(new Set());
+        } else {
+          setSelected(new Set(data.items.map(r => r.id)));
+        }
+      };
+
+      const handleAssign = async () => {
+        if (!targetCliente || selected.size === 0) return;
+        try {
+          await apiFetch('/api/empresas/asignar-cliente', {
+            method: 'POST',
+            body: JSON.stringify({ cliente_id: parseInt(targetCliente), empresa_ids: [...selected] }),
+          });
+          setSelected(new Set());
+          await load();
+        } catch (e) { alert(e.message); }
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen bg-slate-50">
+          <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
+            <div className="max-w-screen-2xl mx-auto px-4 py-3 flex items-center gap-3">
+              <a href="#/" className="text-slate-400 hover:text-blue-600 transition">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </a>
+              <div className="mr-auto">
+                <h1 className="text-lg font-bold text-slate-800">Empresas sin cliente</h1>
+                <p className="text-xs text-slate-400">{data.total} empresas sin asignar</p>
+              </div>
+
+              {/* Assign controls */}
+              {selected.size > 0 && (
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                  <span className="text-sm text-blue-700 font-medium">{selected.size} seleccionadas</span>
+                  <select value={targetCliente} onChange={e => setTargetCliente(e.target.value)}
+                    className="text-sm border border-blue-300 rounded-lg px-2 py-1 bg-white">
+                    <option value="">Asignar a...</option>
+                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <button onClick={handleAssign} disabled={!targetCliente}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                    Asignar
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-screen-2xl w-full mx-auto px-4 py-4">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-3 py-3 sticky top-0 bg-slate-50 z-10">
+                        <input type="checkbox" checked={selected.size === data.items.length && data.items.length > 0}
+                          onChange={selectAll} className="rounded" />
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10">Nombre</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10">Sitio Web</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10">Ciudad</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10">Industria</th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase sticky top-0 bg-slate-50 z-10">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Cargando...</td></tr>
+                    ) : data.items.length === 0 ? (
+                      <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Todas las empresas tienen cliente asignado</td></tr>
+                    ) : data.items.map((row, idx) => (
+                      <tr key={row.id} className={`transition-colors ${selected.has(row.id) ? 'bg-blue-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} hover:bg-blue-50/40`}>
+                        <td className="px-3 py-2 border-b border-slate-100 text-center">
+                          <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} className="rounded" />
+                        </td>
+                        <td className="px-3 py-2 border-b border-slate-100 text-sm font-medium text-slate-700">{row.nombre}</td>
+                        <td className="px-3 py-2 border-b border-slate-100 text-sm">
+                          {row.sitio_web ? <a href={row.sitio_web.startsWith('http') ? row.sitio_web : 'https://'+row.sitio_web} target="_blank" className="text-blue-600 underline">{row.sitio_web}</a> : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-2 border-b border-slate-100 text-sm text-slate-600">{row.ciudad || '—'}</td>
+                        <td className="px-3 py-2 border-b border-slate-100 text-sm text-slate-600">{row.industria || '—'}</td>
+                        <td className="px-3 py-2 border-b border-slate-100"><StatusBadge value={row.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {data.total_pages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/60">
+                  <p className="text-sm text-slate-500">Pagina {data.page} de {data.total_pages}</p>
+                  <div className="flex gap-1">
+                    <PagBtn label="Anterior" disabled={page === 1} onClick={() => setPage(p => p - 1)} />
+                    <PagBtn label="Siguiente" disabled={page >= data.total_pages} onClick={() => setPage(p => p + 1)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // APP ROUTER
+    // ═══════════════════════════════════════════════════════════════════════════
+    function App() {
+      const route = useRoute();
+      if (route.page === 'cliente') return <ClientePage clienteId={route.id} />;
+      if (route.page === 'sin-cliente') return <SinClientePage />;
+      return <HomePage />;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
