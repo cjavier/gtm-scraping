@@ -9,16 +9,29 @@ python scripts/crawl4ai_scraper.py "[URL]" --extract-contacts
 
 Si devuelve éxito, procesar los datos extraídos e insertar en DB.
 
-## Fallback: Firecrawl
+## Fallback 1: Pilot (navegador real)
 Si Crawl4AI falla (timeout, bloqueo, error de parsing):
+python scripts/pilot_scraper.py "[URL]" --extract-contacts --pages /contacto /nosotros
+
+Pilot usa Playwright en modo headed (navegador visible) con stealth patches
+para evitar bloqueos anti-bot. Soporta scrapear múltiples páginas en una sesión.
+
+Opciones útiles:
+- `--pages /contacto /nosotros /equipo` — scrapear rutas adicionales
+- `--full` — extraer contactos + mostrar markdown
+- `--headless` — modo invisible (menos robusto pero más rápido)
+- `--save` — guardar en DB automáticamente
+
+## Fallback 2: Firecrawl
+Si Pilot también falla:
 - Usar la tool firecrawl_scrape del MCP server
 - Pasar la URL y solicitar formato markdown
 - Extraer datos manualmente del markdown devuelto
 
-## Fallback final: Chrome
-Si ambos fallan:
-- Sugerir al usuario abrir la URL con Claude for Chrome
-- "No pude scrapear [URL] automáticamente. ¿Puedes abrirlo en Chrome con Claude for Chrome para que lo revisemos juntos?"
+## Fallback final: Chrome manual
+Si todos fallan:
+- Sugerir al usuario abrir la URL manualmente
+- "No pude scrapear [URL] automáticamente. ¿Puedes abrirlo en Chrome para revisarlo?"
 
 ## Flujo completo de scraping (3 pasos)
 

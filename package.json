@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "firecrawl-mcp": "^3.11.0"
+    "firecrawl-mcp": "^3.11.0",
+    "pilot-mcp": "^0.4.2"
   }
 }

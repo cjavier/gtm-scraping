@@ -81,8 +81,9 @@ El MCP server `gtm-db` expone estas herramientas para gestionar clientes y empre
 
 ### Jerarquia de herramientas Scraping
 1. Primario: Crawl4AI (scripts/crawl4ai_scraper.py o MCP crawl4ai)
-2. Si falla: Firecrawl scrape (MCP firecrawl)
-3. Si ambos fallan: Sugerir Chrome al usuario
+2. Si falla: Pilot (scripts/pilot_scraper.py) — navegador real headed con stealth
+3. Si falla: Firecrawl scrape (MCP firecrawl)
+4. Si todos fallan: Sugerir Chrome manual al usuario
 
 ### Siempre antes de scrapear
 - Verificar si la URL ya existe en la DB para evitar duplicados
@@ -143,6 +144,7 @@ python scripts/api_server.py --port 8080
 - Iniciar viewer + API: `python scripts/api_server.py --port 8080`
 - Buscar en Google: `python scripts/serper_search.py "[query]" --num 20 --country mx`
 - Scrapear sitio: `python scripts/crawl4ai_scraper.py "[URL]" --extract-contacts`
+- Scrapear (fallback navegador): `python scripts/pilot_scraper.py "[URL]" --full --pages /contacto /nosotros`
 - Stats de la DB: `python scripts/db_utils.py --stats`
 - Exportar CSV: `python scripts/db_utils.py --export-csv output/empresas.csv`
 - Exportar JSON: `python scripts/db_utils.py --export-json output/empresas.json`
